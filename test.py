@@ -102,7 +102,14 @@ matplotlib.rc("font", **font)
 matplotlib.rcParams["mathtext.default"] = "regular"  # "it"
 
 t_os = 70
-Q_TTPS = _.Q_Tm / _.alpha_TPS
+t_ps_ = 150
+p_spm = 0.9 * _.p_T
+t_s = IAPWS97(p=p_spm, x=0).t
+delta_tsp = 5  # 5..7
+t_psm = t_s - delta_tsp
+delta_ts = t_psm - t_os
+alpha_TPS_calc = (t_psm - t_os) / (t_ps_ - t_os)
+Q_TTPS = _.Q_Tm / alpha_TPS_calc
 Q_y = 0.15 * Q_TTPS
 # Temps = ndt.T.Temp[vc - 1:].tolist()
 # Time = ndt.T.Time[vc - 1:].tolist()
@@ -132,14 +139,9 @@ point_2 = line_2.intersection(Line(Point(8, 0), Point(8, Q_y)))[0]
 delta_t = point_M1.distance(point_M11)
 t_ps = t_os + delta_t
 
-p_spm = 0.9 * _.p_T
-t_s = IAPWS97(p=p_spm, x=0).t
-delta_tsp = 5  # 5..7
-t_psm = t_s - delta_tsp
-delta_ts = t_psm - t_os
-
 if t_psm > t_ps:
     t_psm = t_ps
+    _.p_T = IAPWS97(t=t_psm + delta_tsp, x=0).p / 0.9
     Q = _.Q_Tm
     point_N1 = Point(Temps[0], t_ps)
 else:
@@ -222,15 +224,13 @@ ca.set_xlabel(r"$t_{вз}$, $^\circ$C")
 ca.set_ylabel(r"$Q_T$, МВт")
 ca.grid(color="gray", linestyle="-")
 
-alpha_TPS_calc = (t_psm - t_os) / (t_ps - t_os)
-
 # ########## Построение диаграмм ##########
 
 _0_ = IAPWS97(p=_.p_0, t=_.t_0)  # . 0
 _0 = IAPWS97(p=_0_.p * 0.95, h=_0_.h)  # . 0*
 withSH = not np.isnan(_.t_SH)
 
-_SH = IAPWS97(p=_0.p / 6, t=_.t_SH)  # . SH Superheater
+_SH = IAPWS97(p=_0.p / 6 if np.isnan(_.p_SH) else _.p_SH, t=_.t_SH)  # . SH Superheater
 p_HP = 1.1 * _SH.p  # pressure after HP
 
 _1_s = IAPWS97(p=p_HP, s=_0.s)  # . 1_s
@@ -260,10 +260,10 @@ p_D = 1.2 * (_.p_D_ + 2)  # отбор на деаэратор
 _FP_ = IAPWS97(p=1.35 * _0.p, h=_D.h)
 # . FP' Feedwater Pump pressure 1.3..1.4 * _.p_0
 eff_FP = 0.8  # Feedwater Pump efficiency
-delta_h_FP = _FP_.P * 1e-3 / eff_FP  # p_fp * v / eff_fp
+delta_h_FP = _FP_.P * 1e-3 * 1e3 / eff_FP  # p_fp * v / eff_fp
 _FP = IAPWS97(p=_FP_.p, h=_D.h + delta_h_FP)  # . FP
-_SG = IAPWS97(p=_0.p + 14, t=_0.t + 5)
 # steam generator pressure p_0 + 10..15 bar  p_SG t_SG have standard
+_SG = IAPWS97(P=13.8 if _0.P + 1 <= 13.8 else 25, t=_0.t + 5)
 _CP = IAPWS97(p=11, h=_C_.h)  # . CP Condensate pump 11 bar by default
 
 
@@ -298,22 +298,37 @@ plot_segment(to_sp_point(_1), to_sp_point(_SH), **solid)  # 1 SH
 
 # ## Распределение подогрева воды по ступеням ##
 
+# ## Сетевые подгреватели ##
+
+t_ps = t_psm
+t_os = t_os
+t_sv = (t_ps + t_os) * 0.5
+
 # равномерное распределение по ступеням
 n_LP = int(_.n_LP)
 n_HP = int(_.n_HP)
 delta_t_FP = _FP.p * _FP.v / (eff_FP * _FP.cp)
-delta_t_HP = (_.t_FW - _D.t - delta_t_FP) / _.n_HP
+delta_t_HP = (_.t_FW - _D.t - delta_t_FP) / n_HP
 delta_t_D = 20  # >=20
 delta_t_OE_PU = 5  # 4..5 подогрев в сальниковом подогревателе
-delta_t_LP = (_D.t - delta_t_D - _C_.t - delta_t_OE_PU) / _.n_LP
+t_LP0 = _C_.t + delta_t_OE_PU
+delta_t_LP = (t_sv - t_LP0) / 2
 
 dt_LP = 4  # недогрев
 dt_HP = 2
 t_h = []  # heater temps
 t_d = []  # drainage temps
 
-for i in np.arange(1, n_LP + 1):
-    t_h.append(_C_.t + delta_t_OE_PU + i * delta_t_LP)
+t_h.append(t_LP0 + delta_t_LP)  # 1
+t_d.append(t_h[-1] + dt_LP)
+t_h.append(t_sv)  # 2
+t_d.append(t_h[-1] + delta_tsp)
+t_h.append(t_ps)  # 3
+t_d.append(t_h[-1] + delta_tsp)
+t_LP0 = t_ps
+delta_t_LP = (_D.t - delta_t_D - t_ps) / (n_LP - 3)
+for i in np.arange(1, n_LP + 1 - 3):
+    t_h.append(t_LP0 + i * delta_t_LP)
     t_d.append(t_h[-1] + dt_LP)
 
 t_h.append(_D.t)
@@ -401,34 +416,7 @@ plot_segment(to_sh_point(_0), to_sh_point(_1), **solid)  # 0 1
 plot_segment(to_sh_point(_0), to_sh_point(_1_s), **dashed)  # 0 1_s
 plot_segment(to_sh_point(_1), to_sh_point(_SH), **solid)  # 1 SH
 
-# ## Сетевые подгреватели ##
-
-t_ps = t_psm
-t_os = t_os
-t_sv = (t_ps + t_os) * 0.5
-
 # ########## Расчет тепловой схемы ##########
-
-# sl - steam leakage # s - seals # p - purge (только с барабаном)
-a_sl, a_s, a_p = (0.02, 0.036, 0)
-a_fw = (1 + a_s + a_sl + a_p)
-K_r = 1.2  # 1.15..1.25
-eff_em = 0.98
-H = S((_0.h - _1.h) + (_SH.h - _C.h))
-N_e = S(_.N * 1000)  # MW -> kW
-y_T1 = 0  # (3.6) T - теплофикационный
-y_T2 = 0  # (3.6)
-D_T1 = 0  # (3.7)
-D_T2 = 0  # (3.7)
-D = K_r * (N_e / (H * eff_em) + y_T1 * D_T1 + y_T2 * D_T2)
-a_T1 = S(D_T1 / D)
-a_T2 = S(D_T2 / D)
-h_dT1 = S(IAPWS97(x=0, t=t_sv + delta_tsp).h)
-h_dT2 = S(IAPWS97(x=0, t=t_ps + delta_tsp).h)
-h_os = S(IAPWS97(x=0, t=t_os).h)
-h_ps = S(IAPWS97(x=0, t=t_ps).h)
-h_sv = S(IAPWS97(x=0, t=t_sv).h)
-a_os = S(_.Q_Tm * 1e3 / ((h_ps - h_os) * D))  # ? тепловая нагрузка
 
 eff = S(0.98)  # КПД теплообменника
 a_1, a_2, a_w2, a_3, a_w3, a_4, a_w4, a_5, a_w5, a_D, a_6, a_7, a_8 = symbols(
@@ -441,16 +429,48 @@ h_d1, h_d2, h_d3, h_d4, h_d5, h_dD, h_d6, h_d7, h_d8 = [S(d.h) for d in _d]
 h_w1, h_w2, h_w3, h_w4, h_w5, h_wD, h_w6, h_w7, h_w8 = [S(w.h) for w in _h]
 h_w0 = S(IAPWS97(x=0, t=_C_.t + delta_t_OE_PU).h)
 
+# sl - steam leakage # s - seals # p - purge (только с барабаном)
+a_sl, a_s, a_p = (0.02, 0.036, 0)
+a_fw = (1 + a_s + a_sl + a_p)
+K_r = 1.2  # 1.15..1.25
+eff_em = 0.98
+H = S((_0.h - _1.h) + (_SH.h - _C.h))
+N_e = S(_.N * 1000)  # MW -> kW
+
+h_dT1 = S(IAPWS97(x=0, t=t_sv + delta_tsp).h)
+h_dT2 = S(IAPWS97(x=0, t=t_ps + delta_tsp).h)
+h_os = S(IAPWS97(x=0, t=t_os).h)
+h_ps = S(IAPWS97(x=0, t=t_ps).h)
+h_sv = S(IAPWS97(x=0, t=t_sv).h)
+h_T1 = h_2
+h_T2 = h_3
+y_T1 = (h_T1 - _C.h) / H  # (3.6) T - теплофикационный
+y_T2 = (h_T2 - _C.h) / H  # (3.6)
+D_T1 = Q * 1e3 / (2 * (h_T1 - h_dT1) * eff)  # (3.7) MW -> kW
+D_T2 = Q * 1e3 / (2 * (h_T2 - h_dT2) * eff)  # (3.7) MW -> kW
+D = K_r * (N_e / (H * eff_em) + y_T1 * D_T1 + y_T2 * D_T2)
+a_os = S(Q * 1e3 / ((h_ps - h_os) * D))  # ? тепловая нагрузка MW -> kW
+a_T1 = S(D_T1 / D)
+a_T2 = S(D_T2 / D)
+
 f_8 = a_8 * (h_8 - h_d8) * eff - (
     a_fw * (h_w8 - h_w7))
 f_7 = a_7 * (h_7 - h_d7) * eff + a_8 * (h_d8 - h_d7) * eff - (
     a_fw * (h_w7 - h_w6))
 f_6 = a_6 * (h_6 - h_d6) * eff + (a_8 + a_7) * (h_d7 - h_d6) * eff - (
-    a_fw * (h_w6 - h_wD))  # !!! h_wD нужно с учетом подогрева в FP
+    a_fw * (h_w6 - (h_wD + delta_h_FP)))  # h_wD с учетом подогрева в FP
 fm_D = a_D + (a_8 + a_7 + a_6) + a_w5 - (
     a_fw)
 f_D = a_D * h_D + (a_8 + a_7 + a_6) * h_d6 + a_w5 * h_w5 - (
     a_fw * h_wD)
+
+s = solve([f_8, f_7, f_6, fm_D, f_D])
+a_8 = s[a_8]
+a_7 = s[a_7]
+a_6 = s[a_6]
+a_w5 = s[a_w5]
+a_D = s[a_D]
+
 f_5 = a_5 * (h_5 - h_d5) * eff - (
     a_w5 * (h_w5 - h_mp4))
 fm_mp4 = a_w4 + (a_5 + a_4) - (
@@ -459,28 +479,26 @@ f_mp4 = a_w4 * h_w4 + (a_5 + a_4) * h_d4 - (
     a_w5 * h_mp4)
 f_4 = a_4 * (h_4 - h_d4) * eff + a_5 * (h_d5 - h_d4) * eff - (
     a_w3 * (h_w4 - h_mp3))
-fm_mp3 = a_w3 + (a_3 + a_T2) - (
+fm_mp3 = a_w3 + a_3 + a_T2 - (
     a_w4)
-f_mp3 = a_w3 * h_w3 + (a_3 + a_T2) * h_dT2 - (
+f_mp3 = a_w3 * h_w3 + a_3 * h_d3 + a_T2 * h_dT2 - (
     a_w4 * h_mp3)
 f_3 = a_3 * (h_3 - h_d3) * eff - (
     a_w2 * (h_w3 - h_mp2))
-f_T2 = a_T2 * (h_3 - h_dT2) * eff + a_3 * (h_d3 - h_dT2) * eff - (
+f_T2 = a_T2 * (h_T2 - h_dT2) * eff - (
     a_os * (h_ps - h_sv))
-fm_mp2 = a_w2 + (a_2 + a_T1) - (
+fm_mp2 = a_w2 + a_T1 + a_2 - (
     a_w3)
-f_mp2 = a_w2 * h_w2 + (a_2 + a_T1) * h_dT1 - (
+f_mp2 = a_w2 * h_w2 + a_T1 * h_dT1 + a_2 * h_d2 - (
     a_w3 * h_mp2)
 f_2 = a_2 * (h_2 - h_d2) * eff - (
     a_w2 * (h_w2 - h_w1))
-f_T1 = a_T1 * (h_2 - h_dT1) * eff + a_2 * (h_d2 - h_dT1) * eff - (
+f_T1 = a_T1 * (h_T1 - h_dT1) * eff - (
     a_os * (h_sv - h_os))
 f_1 = a_1 * (h_1 - h_d1) * eff - (
     a_w2 * (h_w1 - h_w0))
 
-solve([f_8, f_7, f_6, fm_D, f_D, f_5, fm_mp4, f_mp4, f_4, fm_mp3, f_mp3, f_3, f_T2, fm_mp2, f_mp2, f_2, f_T1, f_1],
-      [a_1, a_2, a_w2, a_3, a_w3, a_4, a_w4, a_5, a_w5, a_D, a_6, a_7, a_8, h_mp2, h_mp3, h_mp4])
-
+# solve([f_5, fm_mp4, f_mp4, f_4, fm_mp3, f_mp3, f_3, fm_mp2, f_mp2, f_2, f_1])
 
 def print_iapws97(l, label):
     print("\n********** %s **********" % label)

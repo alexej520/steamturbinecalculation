@@ -69,7 +69,9 @@ def plot(**kwargv):
     # isov_kw = {"ls": "-", "color": "green", "lw": 0.5}
 
     # Show region limits
-    regionBoundary = True
+    regionBoundary = False
+    if "regionBoundary" in kwargv:
+        regionBoundary = kwargv["regionBoundary"]
 
     # Show region5
     region5 = False
