@@ -103,7 +103,7 @@ matplotlib.rcParams["mathtext.default"] = "regular"  # "it"
 
 t_os = 70
 t_ps_ = 150
-p_spm = 0.9 * _.p_T
+p_spm = 0.9 * _.p_Tm
 t_s = IAPWS97(p=p_spm, x=0).t
 delta_tsp = 5  # 5..7
 t_psm = t_s - delta_tsp
@@ -141,10 +141,11 @@ t_ps = t_os + delta_t
 
 if t_psm > t_ps:
     t_psm = t_ps
-    _.p_T = IAPWS97(t=t_psm + delta_tsp, x=0).p / 0.9
+    p_T = IAPWS97(t=t_psm + delta_tsp, x=0).p / 0.9
     Q = _.Q_Tm
     point_N1 = Point(Temps[0], t_ps)
 else:
+    p_T = _.p_Tm
     Q = _.Q_Tm * delta_ts / delta_t
     point_N1 = Line(Point(20, t_psm), Point(Temps[0], t_psm)).intersection(
         Line(point_M1, Point(Temps[0], t_ps)))[0]
@@ -240,12 +241,12 @@ eff_oiHP = eff_oi0 - alpha / _0.v
 h_1 = _0.h - (_0.h - _1_s.h) * eff_oiHP
 _1 = IAPWS97(p=p_HP, h=h_1)  # . 1
 
-_2_s = IAPWS97(p=_.p_T, s = _SH.s)  # . 2_s
+_2_s = IAPWS97(p=p_T, s=_SH.s)  # . 2_s
 eff_oi0 = 0.82  # for IP
 alpha = 1.8e-3  # for IP
 eff_oiIP = eff_oi0 - alpha / _SH.v
 h_2 = _SH.h - (_SH.h - _2_s.h) * eff_oiIP
-_2 = IAPWS97(p=_.p_T, h=h_2)  # . 2
+_2 = IAPWS97(p=p_T, h=h_2)  # . 2
 
 _C_s = IAPWS97(p=_.p_C, s=_2.s)  # . C_s Condenser s
 eff_oi0 = 0.8  # for LP
@@ -499,6 +500,7 @@ f_1 = a_1 * (h_1 - h_d1) * eff - (
     a_w2 * (h_w1 - h_w0))
 
 # solve([f_5, fm_mp4, f_mp4, f_4, fm_mp3, f_mp3, f_3, fm_mp2, f_mp2, f_2, f_1])
+
 
 def print_iapws97(l, label):
     print("\n********** %s **********" % label)
