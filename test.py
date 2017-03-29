@@ -420,10 +420,10 @@ plot_segment(to_sh_point(_1), to_sh_point(_SH), **solid)  # 1 SH
 # ########## Расчет тепловой схемы ##########
 
 eff = S(0.98)  # КПД теплообменника
-a_1, a_2, a_w2, a_3, a_w3, a_4, a_w4, a_5, a_w5, a_D, a_6, a_7, a_8 = symbols(
-    "a_1, a_2, a_w2, a_3, a_w3, a_4, a_w4, a_5, a_w5, a_D, a_6, a_7, a_8")
-h_mp2, h_mp3, h_mp4 = symbols(
-    "h_mp2, h_mp3, h_mp4")
+a_1, a_w1, a_2, a_w2, a_3, a_w3, a_4, a_w4, a_5, a_w5, a_D, a_6, a_7, a_8 = symbols(
+    "a_1, a_w1, a_2, a_w2, a_3, a_w3, a_4, a_w4, a_5, a_w5, a_D, a_6, a_7, a_8")
+h_mp1, h_mp2, h_mp3, h_mp4 = symbols(
+    "h_mp1, h_mp2, h_mp3, h_mp4")
 
 h_1, h_2, h_3, h_4, h_5, h_D, h_6, h_7, h_8 = [S(s.h) for s in _s]
 h_d1, h_d2, h_d3, h_d4, h_d5, h_dD, h_d6, h_d7, h_d8 = [S(d.h) for d in _d]
@@ -479,27 +479,31 @@ fm_mp4 = a_w4 + (a_5 + a_4) - (
 f_mp4 = a_w4 * h_w4 + (a_5 + a_4) * h_d4 - (
     a_w5 * h_mp4)
 f_4 = a_4 * (h_4 - h_d4) * eff + a_5 * (h_d5 - h_d4) * eff - (
-    a_w3 * (h_w4 - h_mp3))
-fm_mp3 = a_w3 + a_3 + a_T2 - (
+    a_w4* (h_w4 - h_mp3))
+fm_mp3 = a_w3 + a_3 - (
     a_w4)
-f_mp3 = a_w3 * h_w3 + a_3 * h_d3 + a_T2 * h_dT2 - (
+f_mp3 = a_w3 * h_w3 + a_3 * h_d3- (
     a_w4 * h_mp3)
 f_3 = a_3 * (h_3 - h_d3) * eff - (
-    a_w2 * (h_w3 - h_mp2))
+    a_w3 * (h_w3 - h_mp2))
 f_T2 = a_T2 * (h_T2 - h_dT2) * eff - (
     a_os * (h_ps - h_sv))
-fm_mp2 = a_w2 + a_T1 + a_2 - (
+fm_mp2 = a_w2 + (a_T1 + a_T2) - (
     a_w3)
-f_mp2 = a_w2 * h_w2 + a_T1 * h_dT1 + a_2 * h_d2 - (
+f_mp2 = a_w2 * h_w2 + (a_T1 + a_T2) * h_dT1 - (
     a_w3 * h_mp2)
 f_2 = a_2 * (h_2 - h_d2) * eff - (
-    a_w2 * (h_w2 - h_w1))
-f_T1 = a_T1 * (h_T1 - h_dT1) * eff - (
+    a_w2 * (h_w2 - h_mp1))
+fm_mp1 = a_w1 + (a_1 + a_2) - (
+    a_w2)
+f_mp1 = a_w1 * h_w1 + (a_1 + a_2) * h_d1 -(
+    a_w2 * h_mp1)
+f_T1 = a_T1 * (h_T1 - h_dT1) * eff + a_T2 * (h_dT2 -h_dT1) * eff - (
     a_os * (h_sv - h_os))
-f_1 = a_1 * (h_1 - h_d1) * eff - (
+f_1 = a_1 * (h_1 - h_d1) * eff + a_2 * (h_d2 - h_d1) * eff - (
     a_w2 * (h_w1 - h_w0))
 
-# solve([f_5, fm_mp4, f_mp4, f_4, fm_mp3, f_mp3, f_3, fm_mp2, f_mp2, f_2, f_1])
+# solve([f_5, fm_mp4, f_mp4, f_4, fm_mp3, f_mp3, f_3, fm_mp2, f_mp2, f_2, fm_mp1, f_mp1, f_1])
 
 
 def print_iapws97(l, label):
