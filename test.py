@@ -291,6 +291,7 @@ plot_segment(to_sp_point(_C), to_sp_point(_C_), **solid)  # C C'
 plot_segment(to_sp_point(_D), to_sp_point(_FP_), **dashed)  # D FP'
 plot_segment(to_sp_point(_D), to_sp_point(_FP), **solid)  # D FP
 plot_segment(to_sp_point(_FP_), to_sp_point(_SG), **solid)  # FP' SG
+plot_segment(to_sp_point(_SG), to_sp_point(_0_), **solid)  # FP' SG
 plot_segment(to_sp_point(_C_), to_sp_point(_CP), **solid)  # C' CP
 plot_segment(to_sp_point(_CP), to_sp_point(_D), **solid)  # CP D
 plot_segment(to_sp_point(_0), to_sp_point(_1), **solid)  # 0 1
@@ -411,6 +412,7 @@ plot_segment(to_sh_point(_C), to_sh_point(_C_), **solid)  # C C'
 plot_segment(to_sh_point(_D), to_sh_point(_FP_), **dashed)  # D FP'
 plot_segment(to_sh_point(_D), to_sh_point(_FP), **solid)  # D FP
 plot_segment(to_sh_point(_FP_), to_sh_point(_SG), **solid)  # FP' SG
+plot_segment(to_sh_point(_SG), to_sh_point(_0_), **solid)  # FP' SG
 plot_segment(to_sh_point(_C_), to_sh_point(_CP), **solid)  # C' CP
 plot_segment(to_sh_point(_CP), to_sh_point(_D), **solid)  # CP D
 plot_segment(to_sh_point(_0), to_sh_point(_1), **solid)  # 0 1
@@ -420,10 +422,10 @@ plot_segment(to_sh_point(_1), to_sh_point(_SH), **solid)  # 1 SH
 # ########## Расчет тепловой схемы ##########
 
 eff = S(0.98)  # КПД теплообменника
-a_1, a_w1, a_2, a_w2, a_3, a_w3, a_4, a_w4, a_5, a_w5, a_D, a_6, a_7, a_8 = symbols(
-    "a_1, a_w1, a_2, a_w2, a_3, a_w3, a_4, a_w4, a_5, a_w5, a_D, a_6, a_7, a_8")
-h_mp1, h_mp2, h_mp3, h_mp4 = symbols(
-    "h_mp1, h_mp2, h_mp3, h_mp4")
+a_1, a_2, a_w2, a_3, a_w3, a_4, a_w4, a_5, a_w5, a_D, a_6, a_7, a_8 = symbols(
+    "a_1, a_2, a_w2, a_3, a_w3, a_4, a_w4, a_5, a_w5, a_D, a_6, a_7, a_8")
+h_mp2, h_mp3, h_mp4 = symbols(
+    "h_mp2, h_mp3, h_mp4")
 
 h_1, h_2, h_3, h_4, h_5, h_D, h_6, h_7, h_8 = [S(s.h) for s in _s]
 h_d1, h_d2, h_d3, h_d4, h_d5, h_dD, h_d6, h_d7, h_d8 = [S(d.h) for d in _d]
@@ -438,12 +440,18 @@ eff_em = 0.98
 H = S((_0.h - _1.h) + (_SH.h - _C.h))
 N_e = S(_.N * 1000)  # MW -> kW
 
-h_dT1 = S(IAPWS97(x=0, t=t_sv + delta_tsp).h)
-h_dT2 = S(IAPWS97(x=0, t=t_ps + delta_tsp).h)
+_d.append(IAPWS97(x=0, t=t_sv + delta_tsp))
+h_dT1 = S(_d[-1].h)
+_d.append(IAPWS97(x=0, t=t_ps + delta_tsp))
+h_dT2 = S(_d[-1].h)
 h_os = S(IAPWS97(x=0, t=t_os).h)
-h_ps = S(IAPWS97(x=0, t=t_ps).h)
-h_sv = S(IAPWS97(x=0, t=t_sv).h)
+_h.append(IAPWS97(x=0, t=t_sv))
+h_sv = S(_h[-1].h)
+_h.append(IAPWS97(x=0, t=t_ps))
+h_ps = S(_h[-1].h)
+_s.append(_s[1])
 h_T1 = h_2
+_s.append(_s[2])
 h_T2 = h_3
 y_T1 = (h_T1 - _C.h) / H  # (3.6) T - теплофикационный
 y_T2 = (h_T2 - _C.h) / H  # (3.6)
@@ -479,32 +487,27 @@ fm_mp4 = a_w4 + (a_5 + a_4) - (
 f_mp4 = a_w4 * h_w4 + (a_5 + a_4) * h_d4 - (
     a_w5 * h_mp4)
 f_4 = a_4 * (h_4 - h_d4) * eff + a_5 * (h_d5 - h_d4) * eff - (
-    a_w4* (h_w4 - h_mp3))
-fm_mp3 = a_w3 + a_3 - (
+    a_w4 * (h_w4 - h_mp3))
+fm_mp3 = a_w3 + a_3 + a_T2 - (
     a_w4)
-f_mp3 = a_w3 * h_w3 + a_3 * h_d3- (
+f_mp3 = a_w3 * h_w3 + a_3 * h_d3 + a_T2 * h_dT2 - (
     a_w4 * h_mp3)
 f_3 = a_3 * (h_3 - h_d3) * eff - (
     a_w3 * (h_w3 - h_mp2))
 f_T2 = a_T2 * (h_T2 - h_dT2) * eff - (
     a_os * (h_ps - h_sv))
-fm_mp2 = a_w2 + (a_T1 + a_T2) - (
+fm_mp2 = a_w2 + a_2 + a_T1 - (
     a_w3)
-f_mp2 = a_w2 * h_w2 + (a_T1 + a_T2) * h_dT1 - (
+f_mp2 = a_w2 * h_w2 + a_2 * h_d2 + a_T1 * h_dT1 - (
     a_w3 * h_mp2)
 f_2 = a_2 * (h_2 - h_d2) * eff - (
-    a_w2 * (h_w2 - h_mp1))
-fm_mp1 = a_w1 + (a_1 + a_2) - (
-    a_w2)
-f_mp1 = a_w1 * h_w1 + (a_1 + a_2) * h_d1 -(
-    a_w2 * h_mp1)
-f_T1 = a_T1 * (h_T1 - h_dT1) * eff + a_T2 * (h_dT2 -h_dT1) * eff - (
+    a_w2 * (h_w2 - h_w1))
+f_T1 = a_T1 * (h_T1 - h_dT1) * eff - (
     a_os * (h_sv - h_os))
-f_1 = a_1 * (h_1 - h_d1) * eff + a_2 * (h_d2 - h_d1) * eff - (
+f_1 = a_1 * (h_1 - h_d1) * eff - (
     a_w2 * (h_w1 - h_w0))
 
-# solve([f_5, fm_mp4, f_mp4, f_4, fm_mp3, f_mp3, f_3, fm_mp2, f_mp2, f_2, fm_mp1, f_mp1, f_1])
-
+# solve([f_5, fm_mp4, f_mp4, f_4, fm_mp3, f_mp3, f_3, fm_mp2, f_mp2, f_2, f_1])
 
 def print_iapws97(l, label):
     print("\n********** %s **********" % label)
