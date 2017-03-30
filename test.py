@@ -435,7 +435,7 @@ h_w0 = S(IAPWS97(x=0, t=_C_.t + delta_t_OE_PU).h)
 # sl - steam leakage # s - seals # p - purge (только с барабаном)
 a_sl, a_s, a_p = (0.02, 0.036, 0)
 a_fw = (1 + a_s + a_sl + a_p)
-K_r = 1.2  # 1.15..1.25
+K_r = 1.15  # 1.15..1.25
 eff_em = 0.98
 H = S((_0.h - _1.h) + (_SH.h - _C.h))
 N_e = S(_.N * 1000)  # MW -> kW
@@ -457,7 +457,7 @@ y_T1 = (h_T1 - _C.h) / H  # (3.6) T - теплофикационный
 y_T2 = (h_T2 - _C.h) / H  # (3.6)
 D_T1 = Q * 1e3 / (2 * (h_T1 - h_dT1) * eff)  # (3.7) MW -> kW
 D_T2 = Q * 1e3 / (2 * (h_T2 - h_dT2) * eff)  # (3.7) MW -> kW
-D = K_r * (N_e / (H * eff_em) + y_T1 * D_T1 + y_T2 * D_T2)
+D = K_r * (N_e / (H * eff_em) + y_T1 * D_T1 + y_T2 * D_T2) if np.isnan(_.D) else _.D
 a_os = S(Q * 1e3 / ((h_ps - h_os) * D))  # ? тепловая нагрузка MW -> kW
 a_T1 = S(D_T1 / D)
 a_T2 = S(D_T2 / D)
@@ -474,11 +474,8 @@ f_D = a_D * h_D + (a_8 + a_7 + a_6) * h_d6 + a_w5 * h_w5 - (
     a_fw * h_wD)
 
 s = solve([f_8, f_7, f_6, fm_D, f_D])
-a_8 = s[a_8]
-a_7 = s[a_7]
-a_6 = s[a_6]
-a_w5 = s[a_w5]
-a_D = s[a_D]
+a_8, a_7, a_6, a_w5, a_D = s[a_8], s[a_7], s[a_6], s[a_w5], s[a_D]
+print(s)
 
 f_5 = a_5 * (h_5 - h_d5) * eff - (
     a_w5 * (h_w5 - h_mp4))
@@ -507,7 +504,11 @@ f_T1 = a_T1 * (h_T1 - h_dT1) * eff - (
 f_1 = a_1 * (h_1 - h_d1) * eff - (
     a_w2 * (h_w1 - h_w0))
 
-# solve([f_5, fm_mp4, f_mp4, f_4, fm_mp3, f_mp3, f_3, fm_mp2, f_mp2, f_2, f_1])
+s = solve([f_5, fm_mp4, f_mp4, f_4, fm_mp3, f_mp3, f_3, fm_mp2, f_mp2, f_2, f_1], manual=True)  # , simplify=False, check=False)
+a_1, a_2, a_w2, a_3, a_w3, a_4, a_w4, a_5, h_mp2, h_mp3, h_mp4 = \
+    s[0][a_1], s[0][a_2], s[0][a_w2], s[0][a_3], s[0][a_w3], s[0][a_4], s[0][a_w4], s[0][a_5], s[0][h_mp2], s[0][h_mp3], s[0][h_mp4]
+print(s)
+
 
 def print_iapws97(l, label):
     print("\n********** %s **********" % label)
@@ -534,6 +535,18 @@ np.savetxt(
     np.row_stack(iapws97_asarray([_s, _d, _h], "t", "p", "h", "s")),
     delimiter=",",
     fmt="%.4g")
+
+_y = []
+for i in range(0, 2):
+    _y.append((_s[i].h - _1.h + _SH.h - _C.h) / H)
+for i in range(2, len(_s)):
+    _y.append((_s[i].h - _C.h) / H)
+
+sum_az = a_1 + a_2 + a_3 + a_D + a_4 + a_5 + a_6 + a_7 + a_8 + a_T1 + a_T2
+sum_azyz = a_1 * _y[0] + a_2 * _y[1] + a_3 * _y[2] + a_D * _y[3] + a_4 * _y[4] + a_5 * _y[5] + a_6 * _y[6] + a_7 * _y[7] + a_8 * _y[8] + a_T1 * y_T1 + a_T2 * y_T2
+D_0 = N_e / (H * eff_em * (1 - sum_azyz))
+delta_D = (D_0 - D) / D_0 * 100  # %
+D_C = D_0 * (1 - sum_az)
 
 system("libreoffice --calc out.csv 2>/dev/null &")
 plt.show()  # (block=False)
